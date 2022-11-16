@@ -1,0 +1,130 @@
+library(tidyverse)
+library(treemapify)
+
+rootDir <- '/Users/rnaidoo/Documents/Canada-Secure/GAC/2021_PEC/Economies_Treemap/'
+dataDir <- paste0(rootDir, 'data/')
+graphicsDir <- paste0(rootDir, 'graphics/')
+
+adv_fn <- paste0(dataDir, 'advanced_economies2.csv')
+emdev_fn <- paste0(dataDir, 'EM_and_dev_economies2.csv')
+
+
+
+#Functions
+format_currency <- function(value) {
+  #value in billions
+  if (value > 1000){
+    val_out <- round(value/1000, 2)
+    num_name <- 'T'
+  } else if (value > 0){
+    val_out <- round(value, 0)
+    num_name <- 'B'
+  }
+  out <- paste0('$', val_out, ' ', num_name)
+  return(out)
+}
+
+colfunc <- colorRampPalette(c("black", "white"))
+
+
+#Prepare Data
+df_adv <- read.csv(adv_fn) %>%
+  rename(`2021 growth projection (%)` = GDP_growth_proj_2021)
+labels <- apply(df_adv['GDP_2020'], 1, format_currency)
+df_adv <- cbind(df_adv, GDP_2020_lab = labels, group = 'advanced')
+
+df_emdev <- read.csv(emdev_fn) %>%
+  rename(`2021 growth projection (%)` = GDP_growth_proj_2021)
+labels <- apply(df_emdev['GDP_2020'], 1, format_currency)
+df_emdev <- cbind(df_emdev, GDP_2020_lab = labels, group = 'emerging and developing')
+
+
+#Treemap Plot
+#Advanced Economies
+title_str <- 'Advanced Economies'
+subtitle_str <- 'By GDP in 2020 (size), and GDP projection for 2021 (shading)'
+p <- ggplot(df_adv, aes(area=GDP_2020, fill=`2021 growth projection (%)`, label=paste(Country, GDP_2020_lab, sep='\n'))) +
+  geom_treemap(start='topleft') +
+  geom_treemap_text(colour = c(rep("white", 6), "#ff96a4", rep("white", 9)),
+                    place = "centre",
+                    size = 32,
+                    grow = FALSE,
+                    start='topleft') +
+  scale_fill_gradient(low = '#030933', high = '#235ee8') + #blue ('#030933', '#235ee8', '#c7dfff), #green ('#033311', '#008751', '#ff96a4), #red ('#260601', 'E8112D', 'E8112D), #yellow ('#bf4200', '#F99915', '#F9D615')
+  labs(title=title_str, subtitle=subtitle_str) +
+  theme(
+    plot.title = element_text(hjust=0, size=18, face='bold', family='sans', margin=margin(0,0,6,0)),
+    plot.subtitle = element_text(hjust=0, size=12, family='sans', margin=margin(0,0,6,0)),
+    legend.title = element_text(hjust=0, size=10, face='bold', family='sans', margin=margin(0,0,10,0)),
+  )
+ggsave(filename=paste0(graphicsDir, 'advanced_econ_R.png'), plot=p, width=15, height=15)
+
+
+#Emerging and Developing Economies
+title_str <- 'Emerging and Developing Economies'
+subtitle_str <- 'By GDP in 2020 (size), and GDP projection for 2021 (shading)'
+p <- ggplot(df_emdev, aes(area=GDP_2020, fill=`2021 growth projection (%)`, label=paste(Country, GDP_2020_lab, sep='\n'))) +
+  geom_treemap(start='topleft') +
+  geom_treemap_text(colour = 'white',
+                    place = "centre",
+                    size = 32,
+                    grow = FALSE,
+                    start='topleft') +
+  scale_fill_gradient(low = '#033311', high = '#008751') + 
+  labs(title=title_str, subtitle=subtitle_str) +
+  theme(
+    plot.title = element_text(hjust=0, size=18, face='bold', family='sans', margin=margin(0,0,6,0)),
+    plot.subtitle = element_text(hjust=0, size=12, family='sans', margin=margin(0,0,6,0)),
+    legend.title = element_text(hjust=0, size=10, face='bold', family='sans', margin=margin(0,0,10,0)),
+  )
+ggsave(filename=paste0(graphicsDir, 'emdev_econ_R.png'), plot=p, width=15, height=15)
+
+
+#Combined
+#title_str <- 'Top Global Economies'
+#subtitle_str <- 'Grouped by advanced economies (blue), and emerging and developing economies (green). Shown by GDP in 2020 (size), and GDP projection for 2021 (shading).'
+df_adv2 <- filter(df_adv, Country != 'Others') %>%
+  filter(Country != 'Canada')
+df_emdev2 <- filter(df_emdev, Country != 'Others')
+
+df_Can <- filter(df_adv, Country=='Canada')
+df_Can[1, 'group'] <- 'Canada'
+
+df_Oth_adv <- filter(df_adv, Country == 'Others')
+df_Oth_emdev <- filter(df_emdev, Country == 'Others')
+Oth_sum = sum(df_Oth_adv['GDP_2020']) + sum(df_Oth_adv['GDP_2020'])
+df_Oth <- data.frame(Country='Other', GDP_2020=Oth_sum, proj=NaN, GDP_2020_lab=format_currency(Oth_sum), group='Other', Optional='') %>%
+  rename(`2021 growth projection (%)` = proj)
+
+df_comb <- rbind(df_adv2, df_emdev2, df_Can, df_Oth) %>%
+  mutate(Country_label = Country) %>%
+  mutate(group2 = group) %>%
+  mutate(group3 = 'not-Other')
+df_comb[35, 'group2'] <- 'advanced'
+df_comb[36, 'group3'] <- 'Other'
+df_comb[4, 'Country_label'] <- 'UK'
+df_comb[17, 'Country_label'] <- 'Russia'
+df_comb[27, 'Country_label'] <- 'Philippines'
+df_comb[29, 'Country_label'] <- 'UAE'
+df_comb[33, 'Country_label'] <- 'COL'
+df_comb <- filter(df_comb, Optional != 'Y')
+
+p <- ggplot(df_comb, aes(area=GDP_2020, fill=group, subgroup=group3, label=paste(Country_label, GDP_2020_lab, sep='\n'))) +
+  geom_treemap(mapping=aes(linetype='longdash', color='white', size=2), start='topleft', layout='squarified') +
+  geom_treemap_text(colour = c(rep("black", nrow(df_comb)-2), "#E8112D", "black"),
+                    place = "centre",
+                    size = 32,
+                    grow = FALSE,
+                    start='topleft',
+                    layout='squarified') +
+  scale_fill_manual(values=c('advanced'='#d6e0f2', 'emerging and developing'='#0c9eab', 'Canada'='#d6e0f2', 'Other'='lightgrey'))  + # teal:#0c9eab orange:#f4b183
+  #scale_fill_gradient(low = '#F9D615', high = '#F99915') + 
+  #labs(title=title_str, subtitle=subtitle_str) +
+  theme(
+    #plot.title = element_text(hjust=0, size=18, face='bold', family='sans', margin=margin(0,0,6,0)),
+    #plot.subtitle = element_text(hjust=0, size=12, family='sans', margin=margin(0,0,6,0)),
+    #legend.title = element_text(hjust=0, size=10, face='bold', family='sans', margin=margin(0,0,10,0)),
+    legend.position = "none"
+  )
+ggsave(filename=paste0(graphicsDir, 'global_econ_R20.png'), plot=p, width=15.66, height=5.62)
+
